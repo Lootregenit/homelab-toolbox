@@ -1,0 +1,55 @@
+---
+name: build
+
+# Builds the toolbox and pushes it to ghcr.io:
+#   :main      -> what lab.ps1 / lab.sh use
+#   :<sha>     -> what Jenkins pins in its agent pod (immutable)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/lootregenit/homelab-toolbox
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Containerfile
+          ignore: DL3008,DL3013,DL4006
+
+      - name: shellcheck
+        run: shellcheck entrypoint.sh lab.sh
+
+      - name: build
+        run: docker build -f Containerfile -t "$IMAGE:ci" .
+
+      - name: smoke test (every tool runs)
+        run: |
+          docker run --rm "$IMAGE:ci" bash -c '
+            set -e
+            terraform version && kubectl version --client && flux --version
+            sops --version && age --version && ansible --version
+            ansible-galaxy collection list | grep -E "community.general|microsoft.ad|ansible.windows|ansible.posix"
+            python -c "import winrm"'
+
+      - name: push
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          SHA=$(git rev-parse --short=12 HEAD)
+          docker tag "$IMAGE:ci" "$IMAGE:$SHA"
+          docker tag "$IMAGE:ci" "$IMAGE:main"
+          docker push "$IMAGE:$SHA"
+          docker push "$IMAGE:main"

@@ -4,7 +4,7 @@
 FROM python:3.13-slim-trixie
 
 # Bump these deliberately (Renovate can do it later). A wrong version fails the build loudly.
-ARG TERRAFORM_VERSION=1.15.3
+ARG TERRAFORM_VERSION=1.17.1
 ARG KUBECTL_VERSION=v1.36.5
 ARG FLUX_VERSION=2.8.8
 ARG SOPS_VERSION=3.13.0

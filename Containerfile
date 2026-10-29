@@ -20,8 +20,11 @@ RUN apt-get update \
       openssh-client git curl ca-certificates unzip jq age iputils-ping dnsutils less nano \
  && rm -rf /var/lib/apt/lists/*
 
+# Downloads land here; WORKDIR instead of `cd` keeps hadolint (DL3003) happy
+WORKDIR /tmp/build
+
 # Terraform, verified against HashiCorp's published checksums
-RUN set -eu; cd /tmp; \
+RUN set -eu; \
     curl -fsSLO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"; \
     curl -fsSLO "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS"; \
     grep "linux_amd64.zip" "terraform_${TERRAFORM_VERSION}_SHA256SUMS" | sha256sum -c -; \
@@ -29,13 +32,13 @@ RUN set -eu; cd /tmp; \
     rm -f terraform_*; terraform version
 
 # kubectl, verified against the upstream .sha256
-RUN set -eu; cd /usr/local/bin; \
+RUN set -eu; \
     curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"; \
     echo "$(curl -fsSL https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256)  kubectl" | sha256sum -c -; \
-    chmod +x kubectl; kubectl version --client
+    install -m 0755 kubectl /usr/local/bin/kubectl; rm -f kubectl; kubectl version --client
 
 # Flux CLI, verified against the release checksums
-RUN set -eu; cd /tmp; \
+RUN set -eu; \
     curl -fsSLO "https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/flux_${FLUX_VERSION}_linux_amd64.tar.gz"; \
     curl -fsSLO "https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/flux_${FLUX_VERSION}_checksums.txt"; \
     grep "linux_amd64.tar.gz" "flux_${FLUX_VERSION}_checksums.txt" | sha256sum -c -; \
@@ -43,7 +46,7 @@ RUN set -eu; cd /tmp; \
     rm -f flux_*; flux --version
 
 # SOPS, verified against the release checksums
-RUN set -eu; cd /tmp; \
+RUN set -eu; \
     curl -fsSLO "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"; \
     curl -fsSLO "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.checksums.txt"; \
     grep " sops-v${SOPS_VERSION}.linux.amd64$" "sops-v${SOPS_VERSION}.checksums.txt" | sha256sum -c -; \
@@ -51,7 +54,7 @@ RUN set -eu; cd /tmp; \
     rm -f sops-*; sops --version
 
 # Ansible + the collections homelab-ansible uses + WinRM for dc-01 + linters
-RUN pip install "${ANSIBLE_CORE}" pywinrm ansible-lint yamllint \
+RUN pip install --no-cache-dir "${ANSIBLE_CORE}" pywinrm ansible-lint yamllint \
  && ansible-galaxy collection install -p /usr/share/ansible/collections \
       "ansible.posix:>=2.0.0,<3.0.0" \
       "community.general:>=11.0.0,<14.0.0" \

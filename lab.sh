@@ -10,7 +10,7 @@ ENGINE="$(command -v podman || command -v docker)"
 
 repo="${1:?usage: lab.sh <repo> [command...]}"; shift
 [ -d "$LAB_REPOS/$repo" ] || { echo "No repo '$repo' in $LAB_REPOS" >&2; exit 1; }
-mkdir -p "$LAB_STATE"/{terraform.d,kube,ansible}
+mkdir -p "$LAB_STATE"/{terraform.d,kube,ansible,sops}
 [ $# -gt 0 ] || set -- bash
 
 env_args=()
@@ -32,6 +32,7 @@ exec "$ENGINE" run --rm -it \
   -v "$LAB_STATE/terraform.d:/root/.terraform.d" \
   -v "$LAB_STATE/kube:/root/.kube" \
   -v "$LAB_STATE/ansible:/root/.ansible" \
+  -v "$LAB_STATE/sops:/root/.config/sops/age" \
   -w "/work/$repo" \
   -e "KUBECONFIG=$LAB_KUBECONFIG" \
   "${env_args[@]}" \

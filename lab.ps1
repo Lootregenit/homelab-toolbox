@@ -10,7 +10,7 @@
 # through from this PowerShell session if they are set. Nothing secret is stored.
 
 $LabRepos  = "$env:USERPROFILE\homelab"                      # folder holding the repos side by side
-$LabState  = "$env:USERPROFILE\.lab"                         # terraform login token, kubeconfig, ansible secrets
+$LabState  = "$env:USERPROFILE\.lab"                         # terraform login token, kubeconfig, ansible secrets, age key
 $LabImage  = "ghcr.io/lootregenit/homelab-toolbox:main"
 $LabKube   = "/root/.kube/lab-zrh-pve-01.yaml"            # kubeconfig path INSIDE the container (playbooks/k3s.yml writes it)
 # Lab names the container resolves without DNS. Plain DNS (port 53) answers with
@@ -32,7 +32,7 @@ function lab {
     $Command = @(if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { "bash" })
 
     if (-not (Test-Path "$LabRepos\$Repo")) { throw "No repo '$Repo' in $LabRepos" }
-    foreach ($d in "terraform.d", "kube", "ansible") {
+    foreach ($d in "terraform.d", "kube", "ansible", "sops") {
         New-Item -ItemType Directory -Force -Path "$LabState\$d" | Out-Null
     }
 
@@ -43,6 +43,7 @@ function lab {
         "-v", "$LabState\terraform.d:/root/.terraform.d",
         "-v", "$LabState\kube:/root/.kube",
         "-v", "$LabState\ansible:/root/.ansible",
+        "-v", "$LabState\sops:/root/.config/sops/age",
         "-w", "/work/$Repo",
         "-e", "KUBECONFIG=$LabKube"
     )

@@ -26,7 +26,9 @@ $LabEngine = if (Get-Command podman -ErrorAction SilentlyContinue) { "podman" } 
 function lab {
     if ($args.Count -lt 1) { throw "usage: lab <repo> [command...]" }
     $Repo    = $args[0]
-    $Command = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @("bash") }
+    # @( ) around the whole if: PowerShell unrolls a one-item array to a plain string,
+    # and splatting a string passes its characters ("b" "a" "s" "h").
+    $Command = @(if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { "bash" })
 
     if (-not (Test-Path "$LabRepos\$Repo")) { throw "No repo '$Repo' in $LabRepos" }
     foreach ($d in "terraform.d", "kube", "ansible") {

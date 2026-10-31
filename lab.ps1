@@ -12,6 +12,13 @@
 $LabRepos  = "$env:USERPROFILE\homelab"                      # folder holding the repos side by side
 $LabState  = "$env:USERPROFILE\.lab"                         # terraform login token, kubeconfig, ansible secrets
 $LabImage  = "ghcr.io/lootregenit/homelab-toolbox:main"
+# Lab names the container resolves without DNS. Plain DNS (port 53) answers with
+# private IPs get dropped on this network (DNS rebinding protection), so pin them.
+$LabHosts  = @{
+    "pve-01.infra.lootregen.com" = "192.168.1.100"
+    "pve-02.infra.lootregen.com" = "192.168.1.101"
+    "pve-03.infra.lootregen.com" = "192.168.1.102"
+}
 $LabEngine = if (Get-Command podman -ErrorAction SilentlyContinue) { "podman" } else { "docker" }
 
 # A plain function on purpose: $args keeps flags like --check or -auto-approve
@@ -35,6 +42,7 @@ function lab {
         "-v", "$LabState\ansible:/root/.ansible",
         "-w", "/work/$Repo"
     )
+    foreach ($n in $LabHosts.Keys) { $runArgs += @("--add-host", "${n}:$($LabHosts[$n])") }
     foreach ($v in "PROXMOX_VE_ENDPOINT", "PROXMOX_VE_API_TOKEN", "TF_CLOUD_ORGANIZATION", "GITHUB_TOKEN", "KUBECONFIG") {
         if (Test-Path "env:$v") { $runArgs += @("-e", $v) }
     }

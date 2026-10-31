@@ -13,6 +13,10 @@ mkdir -p "$LAB_STATE"/{terraform.d,kube,ansible}
 [ $# -gt 0 ] || set -- bash
 
 env_args=()
+# Pin lab names: plain DNS answers with private IPs get dropped (DNS rebinding protection)
+for h in pve-01.infra.lootregen.com:192.168.1.100 pve-02.infra.lootregen.com:192.168.1.101 pve-03.infra.lootregen.com:192.168.1.102; do
+  env_args+=(--add-host "$h")
+done
 for v in PROXMOX_VE_ENDPOINT PROXMOX_VE_API_TOKEN TF_CLOUD_ORGANIZATION GITHUB_TOKEN KUBECONFIG; do
   [ -n "${!v:-}" ] && env_args+=(-e "$v")
 done

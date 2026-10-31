@@ -35,7 +35,13 @@ if [ -f ./ansible.cfg ]; then
   export ANSIBLE_CONFIG="$PWD/ansible.cfg"
 fi
 
-# 5. Git refuses repos owned by another uid (Windows mounts again)
+# 5. Ansible's SSH control sockets and temp files must not live on the mounted
+#    ~/.ansible: Windows (NTFS) bind mounts cannot hold Unix sockets.
+export ANSIBLE_SSH_CONTROL_PATH_DIR=/tmp/.ansible-cp
+export ANSIBLE_LOCAL_TEMP=/tmp/.ansible-tmp
+mkdir -p "$ANSIBLE_SSH_CONTROL_PATH_DIR" "$ANSIBLE_LOCAL_TEMP"
+
+# 6. Git refuses repos owned by another uid (Windows mounts again)
 git config --global --add safe.directory '*'
 
 exec "$@"

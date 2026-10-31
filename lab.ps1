@@ -12,6 +12,7 @@
 $LabRepos  = "$env:USERPROFILE\homelab"                      # folder holding the repos side by side
 $LabState  = "$env:USERPROFILE\.lab"                         # terraform login token, kubeconfig, ansible secrets
 $LabImage  = "ghcr.io/lootregenit/homelab-toolbox:main"
+$LabKube   = "/root/.kube/lab-zrh-pve-01.yaml"            # kubeconfig path INSIDE the container (playbooks/k3s.yml writes it)
 # Lab names the container resolves without DNS. Plain DNS (port 53) answers with
 # private IPs get dropped on this network (DNS rebinding protection), so pin them.
 $LabHosts  = @{
@@ -42,10 +43,11 @@ function lab {
         "-v", "$LabState\terraform.d:/root/.terraform.d",
         "-v", "$LabState\kube:/root/.kube",
         "-v", "$LabState\ansible:/root/.ansible",
-        "-w", "/work/$Repo"
+        "-w", "/work/$Repo",
+        "-e", "KUBECONFIG=$LabKube"
     )
     foreach ($n in $LabHosts.Keys) { $runArgs += @("--add-host", "${n}:$($LabHosts[$n])") }
-    foreach ($v in "PROXMOX_VE_ENDPOINT", "PROXMOX_VE_API_TOKEN", "TF_CLOUD_ORGANIZATION", "GITHUB_TOKEN", "KUBECONFIG") {
+    foreach ($v in "PROXMOX_VE_ENDPOINT", "PROXMOX_VE_API_TOKEN", "TF_CLOUD_ORGANIZATION", "GITHUB_TOKEN") {
         if (Test-Path "env:$v") { $runArgs += @("-e", $v) }
     }
 

@@ -1,0 +1,42 @@
+# homelab-azp-agent: the toolbox image plus the Azure Pipelines agent.
+# Runs as a pod on K3s (homelab/apps/azp-agents), so pipelines use the same tool
+# versions as lab.ps1 on the PC. Not root: the agent refuses root, and the
+# namespace enforces the "restricted" Pod Security level.
+ARG TOOLBOX_IMAGE=ghcr.io/lootregenit/homelab-toolbox:main
+# The tag is part of TOOLBOX_IMAGE (CI passes the image it has just built)
+# hadolint ignore=DL3006
+FROM ${TOOLBOX_IMAGE}
+
+# Bump on purpose. Versions and SHA-256 hashes are in the release notes:
+# https://github.com/microsoft/azure-pipelines-agent/releases
+ARG AZP_AGENT_VERSION=5.282.0
+ARG AZP_AGENT_SHA256=d7a8f9cc0241dbd2d1b26b7ee225ca518fd07e62176aa04668ef1a90a9e41188
+
+# What the agent (.NET) needs on Debian 13. config.sh checks them in the CI smoke test.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libicu76 libssl3t64 libgssapi-krb5-2 zlib1g libstdc++6 \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 1000 --shell /bin/bash agent
+
+WORKDIR /azp/agent
+RUN set -eu; \
+    curl -fsSLo /tmp/agent.tar.gz \
+      "https://download.agent.dev.azure.com/agent/${AZP_AGENT_VERSION}/vsts-agent-linux-x64-${AZP_AGENT_VERSION}.tar.gz"; \
+    echo "${AZP_AGENT_SHA256}  /tmp/agent.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/agent.tar.gz -C /azp/agent; \
+    rm -f /tmp/agent.tar.gz; \
+    chown -R agent:agent /azp
+
+COPY agent/start.sh /azp/start.sh
+RUN chmod 0755 /azp/start.sh
+
+# Pipelines never ask questions
+ENV TF_IN_AUTOMATION=1 \
+    TF_INPUT=0 \
+    HOME=/home/agent
+
+USER agent
+ENTRYPOINT ["/azp/start.sh"]
+# One job per container: the agent exits after a job and Kubernetes starts a clean one.
+CMD ["--once"]

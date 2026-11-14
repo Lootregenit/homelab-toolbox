@@ -1,9 +1,10 @@
 ---
 name: build
 
-# Builds the toolbox and pushes it to ghcr.io:
-#   :main      -> what lab.ps1 / lab.sh use
-#   :<sha>     -> what Jenkins pins in its agent pod (immutable)
+# Builds two images and pushes them to ghcr.io:
+#   homelab-toolbox:main, :<sha>   -> what lab.ps1 / lab.sh use
+#   homelab-azp-agent:<sha>        -> the Azure Pipelines agent on K3s
+#                                     (homelab/apps/azp-agents pins the tag)
 on:
   push:
     branches: [main]
@@ -16,6 +17,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/lootregenit/homelab-toolbox
+  AGENT_IMAGE: ghcr.io/lootregenit/homelab-azp-agent
 
 jobs:
   build:
@@ -23,16 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: hadolint
+      - name: hadolint (toolbox)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Containerfile
           ignore: DL3008,DL3013,DL4006
 
-      - name: shellcheck
-        run: shellcheck entrypoint.sh lab.sh
+      - name: hadolint (agent)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Containerfile.agent
+          ignore: DL3008,DL3013,DL4006
 
-      - name: build
+      - name: shellcheck
+        run: shellcheck entrypoint.sh lab.sh agent/start.sh
+
+      - name: build (toolbox)
         run: docker build -f Containerfile -t "$IMAGE:ci" .
 
       - name: smoke test (every tool runs)
@@ -44,6 +52,20 @@ jobs:
             ansible-galaxy collection list | grep -E "community.general|microsoft.ad|ansible.windows|ansible.posix"
             python -c "import winrm"'
 
+      - name: build (agent, on top of the toolbox just built)
+        run: docker build -f Containerfile.agent --build-arg TOOLBOX_IMAGE="$IMAGE:ci" -t "$AGENT_IMAGE:ci" .
+
+      - name: smoke test (agent starts as a normal user, tools still run)
+        run: |
+          docker run --rm --entrypoint bash "$AGENT_IMAGE:ci" -c '
+            set -e
+            test "$(id -u)" = 1000
+            cd /azp/agent
+            ./config.sh --version        # also fails when a .NET dependency is missing
+            terraform version && ansible --version
+            ssh -V && git --version && jq --version
+            python -c "import winrm"'
+
       - name: push
         if: github.ref == 'refs/heads/main'
         run: |
@@ -51,5 +73,8 @@ jobs:
           SHA=$(git rev-parse --short=12 HEAD)
           docker tag "$IMAGE:ci" "$IMAGE:$SHA"
           docker tag "$IMAGE:ci" "$IMAGE:main"
+          docker tag "$AGENT_IMAGE:ci" "$AGENT_IMAGE:$SHA"
           docker push "$IMAGE:$SHA"
           docker push "$IMAGE:main"
+          docker push "$AGENT_IMAGE:$SHA"
+          echo "Agent image: $AGENT_IMAGE:$SHA" >> "$GITHUB_STEP_SUMMARY"

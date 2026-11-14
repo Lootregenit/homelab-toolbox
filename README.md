@@ -7,7 +7,7 @@ Terraform, Ansible (+ collections, pywinrm, ansible-lint), kubectl, Flux, SOPS, 
 |---|---|
 | Your PC (Windows) | `lab.ps1` via Podman Desktop or Docker Desktop |
 | Your PC (Linux/WSL) | `lab.sh` |
-| K3s (Phase 9+) | Jenkins agent pod, image pinned to `:<sha>` |
+| K3s (Phase 10) | Azure Pipelines agent: `homelab-azp-agent:<sha>` = this image + the agent (`Containerfile.agent`) |
 | GitHub Actions | `container: ghcr.io/lootregenit/homelab-toolbox:<sha>` |
 
 ## Why not run Terraform and Ansible *only* inside the cluster
@@ -17,8 +17,8 @@ a broken cluster would take away the tools to repair it, and an apply that repla
 a K3s node would kill its own runner halfway. So:
 
 - **Bootstrap and break-glass:** this image on your PC. Builds everything from nothing.
-- **Day 2 (Phase 9+):** the same image as a Jenkins pod on K3s: `terraform plan` on every
-  push, `apply` after you approve, a nightly `ansible-playbook --check` that reports drift.
+- **Day 2 (Phase 10):** the same image as an Azure Pipelines agent on K3s: `terraform plan` on
+  every pull request, `apply` after you approve, `ansible-playbook --check --diff` before every run.
 - **State** is in HCP Terraform, so both paths see the same state and its lock.
 
 ## First use (Windows)
@@ -43,3 +43,14 @@ Put the vault password at `%USERPROFILE%\.lab\ansible\vault_pass`.
 Bash scripts and Jinja templates break with Windows line endings. Every repo has a
 `.gitattributes` with `* text=auto eol=lf`, and `core.autocrlf false` keeps Git
 from converting them on Windows.
+
+## The agent image
+
+`Containerfile.agent` adds the Azure Pipelines agent to the toolbox and runs it as user
+`agent` (uid 1000). `agent/start.sh` registers the agent with a PAT, removes the PAT from
+the environment and starts the agent with `--once`: one job per container, then Kubernetes
+starts a clean one. The agent does not update itself; a new version is a commit here
+(`AZP_AGENT_VERSION` and `AZP_AGENT_SHA256`).
+
+Each build on `main` pushes `ghcr.io/lootregenit/homelab-azp-agent:<12-char sha>`.
+Put that tag into the cluster with `bash scripts/set-image-tag.sh apps/azp-agents <sha>` in `homelab`.

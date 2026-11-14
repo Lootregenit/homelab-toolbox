@@ -1,6 +1,6 @@
 # homelab-toolbox: every CLI the lab needs, pinned, in one image.
-# Used three ways: on your PC (lab.ps1 / lab.sh), as a Jenkins agent pod on K3s,
-# and in GitHub Actions. Same versions everywhere.
+# Used three ways: on your PC (lab.ps1 / lab.sh), as the base of the Azure Pipelines
+# agent on K3s (Containerfile.agent), and in GitHub Actions. Same versions everywhere.
 FROM python:3.13-slim-trixie
 
 # Bump these deliberately (Renovate can do it later). A wrong version fails the build loudly.
